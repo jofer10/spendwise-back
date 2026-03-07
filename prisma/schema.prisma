@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                 String                 @unique
+  passwordHash          String                 @map("password_hash")
+  fullName              String                 @map("full_name")
+  currency              String                 @default("PEN")
+  timezone              String                 @default("America/Lima")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  accounts              accounts[]
+  budgets               budgets[]
+  categories            categories[]
+  notification_log      notification_log[]
+  notification_settings notification_settings?
+  payment_methods       payment_methods[]
+  recurring_rules       recurring_rules[]
+  refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
+  spending_policy       spending_policy?
+  transactions          transactions[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  revoked_at DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_refresh_tokens_user")
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_password_reset_tokens_user")
+  @@index([expiresAt], map: "idx_password_reset_tokens_expires")
+  @@map("password_reset_tokens")
+}
+
+model accounts {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String            @db.Uuid
+  name            String
+  type            account_type
+  currency        String            @default("PEN")
+  initial_balance Decimal           @default(0) @db.Decimal(12, 2)
+  is_default      Boolean           @default(false)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  users           User              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  recurring_rules recurring_rules[]
+  transactions    transactions[]
+
+  @@unique([user_id, name])
+  @@index([user_id], map: "idx_accounts_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model budget_categories {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budget_id    String     @db.Uuid
+  category_id  String     @db.Uuid
+  limit_amount Decimal    @db.Decimal(12, 2)
+  budgets      budgets    @relation(fields: [budget_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  categories   categories @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+
+  @@unique([budget_id, category_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model budgets {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String              @db.Uuid
+  month             DateTime            @db.Date
+  total_limit       Decimal             @db.Decimal(12, 2)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  budget_categories budget_categories[]
+  users             User                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, month])
+  @@index([user_id, month], map: "idx_budgets_user_month")
+}
+
+model categories {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String              @db.Uuid
+  name              String
+  kind              category_kind
+  color             String?
+  icon              String?
+  is_active         Boolean             @default(true)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  budget_categories budget_categories[]
+  users             User                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  recurring_rules   recurring_rules[]
+  transactions      transactions[]
+
+  @@unique([user_id, name])
+  @@index([user_id], map: "idx_categories_user")
+}
+
+model notification_log {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id   String   @db.Uuid
+  month     DateTime @db.Date
+  threshold Int
+  sent_at   DateTime @default(now()) @db.Timestamptz(6)
+  users     User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, month, threshold])
+  @@index([user_id, month], map: "idx_notif_log_user_month")
+}
+
+model notification_settings {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String   @unique @db.Uuid
+  email_enabled Boolean  @default(true)
+  thresholds    Int[]    @default([70, 85, 100])
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+  users         User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model payment_methods {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String            @db.Uuid
+  name            String
+  type            pay_method_type
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  users           User              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  recurring_rules recurring_rules[]
+  transactions    transactions[]
+
+  @@unique([user_id, name])
+  @@index([user_id], map: "idx_payment_methods_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model recurring_rules {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String           @db.Uuid
+  type              txn_type
+  amount            Decimal          @db.Decimal(12, 2)
+  category_id       String           @db.Uuid
+  account_id        String           @db.Uuid
+  payment_method_id String?          @db.Uuid
+  description       String?
+  rrule             String
+  next_run_date     DateTime         @db.Date
+  is_active         Boolean          @default(true)
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime         @default(now()) @db.Timestamptz(6)
+  accounts          accounts         @relation(fields: [account_id], references: [id], onUpdate: NoAction)
+  categories        categories       @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+  payment_methods   payment_methods? @relation(fields: [payment_method_id], references: [id], onUpdate: NoAction)
+  users             User             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, next_run_date], map: "idx_recurring_user_next")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spending_policy {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String   @unique @db.Uuid
+  savings_pct  Decimal  @db.Decimal(5, 2)
+  spending_pct Decimal  @db.Decimal(5, 2)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+  users        User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model transactions {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String           @db.Uuid
+  account_id        String           @db.Uuid
+  category_id       String           @db.Uuid
+  payment_method_id String?          @db.Uuid
+  type              txn_type
+  amount            Decimal          @db.Decimal(12, 2)
+  description       String?
+  transaction_date  DateTime         @db.Date
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime         @default(now()) @db.Timestamptz(6)
+  accounts          accounts         @relation(fields: [account_id], references: [id], onUpdate: NoAction)
+  categories        categories       @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+  payment_methods   payment_methods? @relation(fields: [payment_method_id], references: [id], onUpdate: NoAction)
+  users             User             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, category_id, transaction_date], map: "idx_txn_user_category_date")
+  @@index([user_id, transaction_date], map: "idx_txn_user_date")
+  @@index([user_id, type, transaction_date], map: "idx_txn_user_type_date")
+}
+
+enum account_type {
+  CASH
+  BANK
+  CARD
+  WALLET
+}
+
+enum category_kind {
+  INCOME
+  EXPENSE
+  BOTH
+}
+
+enum pay_method_type {
+  CASH
+  CARD
+  TRANSFER
+  WALLET
+  OTHER
+}
+
+enum txn_type {
+  INCOME
+  EXPENSE
+}
