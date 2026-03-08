@@ -9,6 +9,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  // Desactivar ETag para que GET /api/* no devuelva 304 Not Modified
+  app.getHttpAdapter().getInstance().set('etag', false);
+
   app.use(helmet());
   app.enableCors({
     origin: config.get<string>('cors.origin', '*'),
