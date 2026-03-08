@@ -50,6 +50,9 @@ src/
 │   │   ├── mail.service.ts
 │   │   └── templates/
 │   ├── health/             # GET /health
+│   ├── accounts/           # CRUD cuentas (BANK, CASH, CARD, WALLET)
+│   ├── categories/         # CRUD categorías (INCOME, EXPENSE, BOTH)
+│   ├── transactions/       # CRUD transacciones con filtros y paginación
 │   └── queue/              # BullMQ (infra preparada)
 docs/
 ├── README.md               # Esta documentación
@@ -164,6 +167,36 @@ npm run prisma:migrate:deploy
 |--------|------|-------------|
 | GET | /api/health | Health check |
 
+### Accounts (Bearer)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | /api/accounts | Listar cuentas del usuario |
+| GET | /api/accounts/:id | Obtener cuenta por ID |
+| POST | /api/accounts | Crear cuenta |
+| PATCH | /api/accounts/:id | Actualizar cuenta |
+| DELETE | /api/accounts/:id | Eliminar cuenta |
+
+### Categories (Bearer)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | /api/categories | Listar categorías del usuario |
+| GET | /api/categories/:id | Obtener categoría por ID |
+| POST | /api/categories | Crear categoría |
+| PATCH | /api/categories/:id | Actualizar categoría |
+| DELETE | /api/categories/:id | Eliminar categoría |
+
+### Transactions (Bearer)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | /api/transactions | Listar transacciones (filtros: date_from, date_to, type, account_id, category_id; paginación: page, limit) |
+| GET | /api/transactions/:id | Obtener transacción por ID |
+| POST | /api/transactions | Crear transacción |
+| PATCH | /api/transactions/:id | Actualizar transacción |
+| DELETE | /api/transactions/:id | Eliminar transacción |
+
 ---
 
 ## Ejemplos de requests/responses
@@ -270,6 +303,39 @@ npm run prisma:migrate:deploy
   "timezone": "UTC"
 }
 ```
+
+### POST /api/accounts
+
+**Request (Header):** `Authorization: Bearer <accessToken>`  
+**Request (Body):**
+```json
+{
+  "name": "Cuenta principal",
+  "type": "BANK",
+  "currency": "PEN",
+  "initial_balance": 1000,
+  "is_default": true
+}
+```
+
+**Response (201):** Cuenta creada con `id`, `user_id`, `name`, `type`, `currency`, `initial_balance`, `is_default`, etc.
+
+### POST /api/transactions
+
+**Request (Header):** `Authorization: Bearer <accessToken>`  
+**Request (Body):**
+```json
+{
+  "account_id": "uuid-cuenta",
+  "category_id": "uuid-categoria",
+  "type": "EXPENSE",
+  "amount": 150.5,
+  "transaction_date": "2025-03-02",
+  "description": "Supermercado"
+}
+```
+
+**Response (201):** Transacción creada con relaciones incluidas (accounts, categories, payment_methods).
 
 ---
 
